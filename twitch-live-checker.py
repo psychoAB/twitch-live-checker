@@ -6,6 +6,7 @@ import socket
 #================================================
 
 filepath = 'streamer_list.txt'
+retry_limit = 5
 
 #================================================
 
@@ -46,8 +47,9 @@ streamer_max_length = max( map( len, streamer_list ) )
 for streamer in streamer_list:
 
     should_retry = True;
+    retry_count = 0
 
-    while should_retry == True:
+    while should_retry == True and retry_count < retry_limit:
 
         try:
             html_content = urllib.request.urlopen( 'https://www.twitch.tv/' + streamer ).read().decode( 'utf-8' )
@@ -72,11 +74,16 @@ for streamer in streamer_list:
             quit( error.errno )
 
         if html_content.find( 'isLiveBroadcast' ) != -1:
-            print( '{}\tLive'.format( ( streamer + ':' ).ljust( streamer_max_length ) ) )
+            print( '{}\tLive'.format( streamer.ljust( streamer_max_length ) ) )
 
             should_retry = False
         else:
             if html_content.find( streamer ) != -1:
-                print( '{}\tOffline'.format( ( streamer + ':' ).ljust( streamer_max_length ) ) )
+                print( '{}\tOffline'.format( streamer.ljust( streamer_max_length ) ) )
 
                 should_retry = False
+            else:
+                retry_count = retry_count + 1
+
+    if retry_count >= retry_limit:
+        print( '{}\tNot Found'.format( streamer.ljust( streamer_max_length ) ) )
