@@ -4,9 +4,11 @@ import sys
 import socket
 import time
 
+from pathlib import Path
+
 #================================================
 
-filepath = 'streamer_list.txt'
+filepath = Path.home() / Path( '.twitch-live-checker.conf' )
 retry_limit = 5
 retry_interval = 0.2
 
