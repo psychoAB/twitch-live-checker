@@ -2,11 +2,13 @@
 import urllib.request
 import sys
 import socket
+import time
 
 #================================================
 
 filepath = 'streamer_list.txt'
 retry_limit = 5
+retry_interval = 0.2
 
 #================================================
 
@@ -43,6 +45,8 @@ def main():
                     should_retry = False
                 else:
                     retry_count = retry_count + 1
+
+                    time.sleep( retry_interval )
     
         if retry_count >= retry_limit:
             print_streamer_status( streamer, 'Not Found', streamer_max_length )
