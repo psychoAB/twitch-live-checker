@@ -8,7 +8,7 @@ ___
 ```bash
 ./twitch-live-checker.py
 ```
-The program will read streamers' name from `~/twitch-live-checker.conf`.
+The program will read streamers' name from `~/.twitch-live-checker.conf`.
 
 ##### or
 ```bash
