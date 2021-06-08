@@ -66,13 +66,13 @@ def get_streamer_html_content( streamer ):
         html_content = urllib.request.urlopen( 'https://www.twitch.tv/' + streamer ).read().decode( 'utf-8' )
     except urllib.error.URLError as error:
         if type( error.reason ) == socket.gaierror:
-            print( str( error.reason ) )
+            print( str( error ) )
 
             print( 'Check your network connection.' )
 
             quit( error.reason.errno )
         else:
-            print( str( error.reason ) )
+            print( str( error ) )
 
             print( "It's unexpected." )
 
