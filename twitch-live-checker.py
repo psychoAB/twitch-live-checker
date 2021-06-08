@@ -71,18 +71,6 @@ def get_streamer_html_content( streamer ):
             print_to_stderr( 'Check your network connection.' )
 
             quit( error.reason.errno )
-        else:
-            print_to_stderr( str( error ) )
-
-            print_to_stderr( "It's unexpected." )
-
-            quit( error.errno )
-    except Exception as error:
-        print_to_stderr( str( error ) )
-
-        print_to_stderr( "It's unexpected." )
-
-        quit( error.errno )
 
     return html_content
 
@@ -108,12 +96,6 @@ def read_streamer_list_file( filepath ):
         file = open( filepath, 'r' )
     except FileNotFoundError as error:
         print_to_stderr( str( error ) )
-    
-        quit( error.errno )
-    except Exception as error:
-        print_to_stderr( str( error ) )
-    
-        print_to_stderr( "It's unexpected." )
     
         quit( error.errno )
     
