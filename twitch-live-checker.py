@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/bin/python
 import urllib.request
 import sys
 import socket
