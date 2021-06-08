@@ -3,6 +3,7 @@ import urllib.request
 import sys
 import socket
 import time
+import re
 
 from pathlib import Path
 
@@ -91,6 +92,12 @@ def parse_streamer_list_file( file_text ):
     streamer_list = file_text.split( '\n' )
 
     streamer_list = streamer_list[ 0 : -1 ]
+
+    for streamer in streamer_list:
+        if re.fullmatch( '[a-zA-Z0-9]\w{3,24}', streamer ) == None:
+            streamer_list.remove( streamer )
+
+            print( '"' + streamer + '"' + " does NOT follow the Twitch's username rules." )
 
     return streamer_list
 
