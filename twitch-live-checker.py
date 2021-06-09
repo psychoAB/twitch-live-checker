@@ -1,8 +1,9 @@
-#!/bin/env python
+#!/bin/python
 import urllib.request
 import sys
 import socket
 import time
+import re
 
 from pathlib import Path
 
@@ -65,23 +66,11 @@ def get_streamer_html_content( streamer ):
         html_content = urllib.request.urlopen( 'https://www.twitch.tv/' + streamer ).read().decode( 'utf-8' )
     except urllib.error.URLError as error:
         if type( error.reason ) == socket.gaierror:
-            print( str( error.reason ) )
+            print_to_stderr( str( error ) )
 
-            print( 'Check your network connection.' )
+            print_to_stderr( 'Check your network connection.' )
 
             quit( error.reason.errno )
-        else:
-            print( str( error.reason ) )
-
-            print( "It's unexpected." )
-
-            quit( error.errno )
-    except Exception as error:
-        print( str( error ) )
-
-        print( "It's unexpected." )
-
-        quit( error.errno )
 
     return html_content
 
@@ -92,6 +81,12 @@ def parse_streamer_list_file( file_text ):
 
     streamer_list = streamer_list[ 0 : -1 ]
 
+    for streamer in streamer_list:
+        if re.fullmatch( '[a-zA-Z0-9]\w{3,24}', streamer ) == None:
+            streamer_list.remove( streamer )
+
+            print_to_stderr( '"' + streamer + '"' + " does NOT follow the Twitch's username rules." )
+
     return streamer_list
 
 #================================================
@@ -100,13 +95,7 @@ def read_streamer_list_file( filepath ):
     try:
         file = open( filepath, 'r' )
     except FileNotFoundError as error:
-        print( str( error ) )
-    
-        quit( error.errno )
-    except Exception as error:
-        print( str( error ) )
-    
-        print( "It's unexpected." )
+        print_to_stderr( str( error ) )
     
         quit( error.errno )
     
@@ -115,6 +104,11 @@ def read_streamer_list_file( filepath ):
     file.close()
 
     return file_text
+
+#================================================
+
+def print_to_stderr( message ):
+    print( message, file = sys.stderr )
 
 #================================================
 
