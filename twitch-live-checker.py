@@ -15,7 +15,7 @@ filepath = pathlib.Path.home() / pathlib.Path( '.twitch-live-checker.conf' )
 retry_limit = 3
 retry_interval = 0.5
 main_thread_interval = 0.2
-thread_max = 4
+thread_max = 1
 
 class StreamerStatus( enum.Enum ):
     waiting     = 'Waiting'
@@ -99,10 +99,20 @@ def get_streamer_html_content( streamer ):
 #================================================
 
 def parse_streamer_list_file( file_text ):
-    streamer_list = file_text.split( '\n' )
 
-    streamer_list = streamer_list[ 0 : -1 ]
+    global thread_max
+    
+    file_text_split = file_text.split( '\n' )
 
+    file_text_split = file_text_split[ 0 : -1 ]
+
+    if ( len( file_text_split ) > 0 ) and ( file_text_split[ 0 ].isdecimal() ):
+        thread_max = int( file_text_split[ 0 ] )
+
+        file_text_split = file_text_split[ 1 : ]
+
+    streamer_list = file_text_split
+            
     username_non_valid_list = []
 
     for streamer in streamer_list:
