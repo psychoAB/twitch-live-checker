@@ -4,60 +4,82 @@ import sys
 import socket
 import time
 import re
-
-from pathlib import Path
+import os
+import threading
+import enum
+import pathlib
 
 #================================================
 
-filepath = Path.home() / Path( '.twitch-live-checker.conf' )
-retry_limit = 5
-retry_interval = 0.2
+filepath = pathlib.Path.home() / pathlib.Path( '.twitch-live-checker.conf' )
+retry_limit = 3
+retry_interval = 0.5
+main_thread_interval = 0.2
+thread_max = 1
+
+class StreamerStatus( enum.Enum ):
+    waiting     = 'Waiting'
+    checking    = 'Checking'
+    live        = 'Live'
+    offline     = 'Offline'
+    not_found   = 'Not Found'
 
 #================================================
 
 def main():
 
-    global filepath;
+    global filepath
 
     if len( sys.argv ) > 1:
         filepath = sys.argv[ 1 ]
 
     file_text = read_streamer_list_file( filepath )
     
-    streamer_list = parse_streamer_list_file( file_text )
+    ( streamer_list, username_non_valid_list ) = parse_streamer_list_file( file_text )
     
-    streamer_max_length = max( map( len, streamer_list ) )
-    
-    for streamer in streamer_list:
-    
-        should_retry = True;
-        retry_count = 0
-    
-        while should_retry == True and retry_count < retry_limit:
-    
-            html_content = get_streamer_html_content( streamer )
-    
-            if html_content.find( 'isLiveBroadcast' ) != -1:
-                print_streamer_status( streamer, 'Live', streamer_max_length )
-    
-                should_retry = False
-            else:
-                if html_content.find( streamer ) != -1:
-                    print_streamer_status( streamer, 'Offline', streamer_max_length )
-    
-                    should_retry = False
-                else:
-                    retry_count = retry_count + 1
+    streamer_status = dict( zip( streamer_list, [ StreamerStatus.waiting ] * len( streamer_list ) ) )
 
-                    time.sleep( retry_interval )
-    
-        if retry_count >= retry_limit:
-            print_streamer_status( streamer, 'Not Found', streamer_max_length )
+    streamer_list.reverse()
+
+    while ( len( streamer_list ) > 0 ) or ( threading.activeCount() > 1 ):
+
+        while ( len( streamer_list ) > 0 ) and ( threading.activeCount() < thread_max + 1 ):
+            threading.Thread( target = check_streamer_status, args = ( streamer_list.pop(), streamer_status ) ).start()
+
+        print_main_output( streamer_status, username_non_valid_list )
+
+        time.sleep( main_thread_interval )
+
+    print_main_output( streamer_status, username_non_valid_list )
 
 #================================================
 
-def print_streamer_status( streamer, status, streamer_max_length ):
-    print( '{}\t'.format( streamer.ljust( streamer_max_length ) ) + status )
+def check_streamer_status( streamer, streamer_status ):
+    should_retry = True
+    retry_count = 0
+
+    streamer_status[ streamer ] = StreamerStatus.checking
+
+    while should_retry == True and retry_count < retry_limit:
+
+        html_content = get_streamer_html_content( streamer )
+
+        if html_content.find( 'isLiveBroadcast' ) != -1:
+            streamer_status[ streamer ] = StreamerStatus.live
+
+            should_retry = False
+        else:
+            if html_content.find( streamer ) != -1:
+                streamer_status[ streamer ] = StreamerStatus.offline
+
+                should_retry = False
+            else:
+                retry_count = retry_count + 1
+
+                time.sleep( retry_interval )
+
+    if retry_count >= retry_limit:
+        streamer_status[ streamer ] = StreamerStatus.not_found
 
 #================================================
 
@@ -77,17 +99,30 @@ def get_streamer_html_content( streamer ):
 #================================================
 
 def parse_streamer_list_file( file_text ):
-    streamer_list = file_text.split( '\n' )
 
-    streamer_list = streamer_list[ 0 : -1 ]
+    global thread_max
+    
+    file_text_split = file_text.split( '\n' )
+
+    file_text_split = file_text_split[ 0 : -1 ]
+
+    if ( len( file_text_split ) > 0 ) and ( file_text_split[ 0 ].isdecimal() ):
+        thread_max = int( file_text_split[ 0 ] )
+
+        file_text_split = file_text_split[ 1 : ]
+
+    streamer_list = file_text_split
+            
+    username_non_valid_list = []
 
     for streamer in streamer_list:
         if re.fullmatch( '[a-zA-Z0-9]\w{3,24}', streamer ) == None:
-            streamer_list.remove( streamer )
+            username_non_valid_list.append( streamer )
 
-            print_to_stderr( '"' + streamer + '"' + " does NOT follow the Twitch's username rules." )
+    for username in username_non_valid_list:
+        streamer_list.remove( username )
 
-    return streamer_list
+    return ( streamer_list, username_non_valid_list )
 
 #================================================
 
@@ -107,8 +142,37 @@ def read_streamer_list_file( filepath ):
 
 #================================================
 
+def print_main_output( streamer_status, username_non_valid_list ):
+    if len( streamer_status ) > 0:
+        clear_screen()
+
+        streamer_max_length = max( map( len, streamer_status.keys() ) )
+
+        for streamer in streamer_status.keys():
+            print_streamer_status( streamer, streamer_status[ streamer ].value, streamer_max_length )
+    else:
+        print_to_stderr( 'The streamers list is empty.' )
+
+    for username in username_non_valid_list:
+        print_to_stderr( '"' + username + '"' + " does NOT follow the Twitch's username rules." )
+
+#================================================
+
+def print_streamer_status( streamer, status, streamer_max_length ):
+    print( '{}\t'.format( streamer.ljust( streamer_max_length ) ) + status )
+
+#================================================
+
 def print_to_stderr( message ):
     print( message, file = sys.stderr )
+
+#================================================
+
+def clear_screen():
+    if os.name == 'nt':
+        os.system( 'cls' )
+    else:
+        os.system( 'clear') 
 
 #================================================
 
