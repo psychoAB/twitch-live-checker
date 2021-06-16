@@ -4,55 +4,96 @@ import sys
 import socket
 import time
 import re
-
-from pathlib import Path
+import os
+import threading
+import enum
+import pathlib
 
 #================================================
 
-filepath = Path.home() / Path( '.twitch-live-checker.conf' )
-retry_limit = 5
-retry_interval = 0.2
+filepath = pathlib.Path.home() / pathlib.Path( '.twitch-live-checker.conf' )
+retry_limit = 3
+retry_interval = 0.5
+main_thread_interval = 0.2
+thread_max = 4
+
+streamer_status = {}
+
+class StreamerStatus( enum.Enum ):
+    waiting     = 'Waiting'
+    checking    = 'Checking'
+    live        = 'Live'
+    offline     = 'Offline'
+    not_found   = 'Not Found'
 
 #================================================
 
 def main():
 
-    global filepath;
+    global filepath
+    global streamer_status
 
     if len( sys.argv ) > 1:
         filepath = sys.argv[ 1 ]
+
+    clear_screen()
 
     file_text = read_streamer_list_file( filepath )
     
     streamer_list = parse_streamer_list_file( file_text )
     
     streamer_max_length = max( map( len, streamer_list ) )
-    
-    for streamer in streamer_list:
-    
-        should_retry = True;
-        retry_count = 0
-    
-        while should_retry == True and retry_count < retry_limit:
-    
-            html_content = get_streamer_html_content( streamer )
-    
-            if html_content.find( 'isLiveBroadcast' ) != -1:
-                print_streamer_status( streamer, 'Live', streamer_max_length )
-    
+
+    streamer_status = dict( zip( streamer_list, [ StreamerStatus.waiting ] * len( streamer_list ) ) )
+
+    streamer_list.reverse()
+
+    while ( len( streamer_list ) > 0 ) | ( threading.activeCount() > 1 ):
+
+        while ( len( streamer_list ) > 0 ) & ( threading.activeCount() < thread_max + 1 ):
+            threading.Thread( target = check_streamer_status, args = ( streamer_list.pop(), ) ).start()
+
+        for streamer in streamer_status.keys():
+            print_streamer_status( streamer, streamer_status[ streamer ].value, streamer_max_length )
+
+        time.sleep( main_thread_interval )
+
+        clear_screen()
+
+    for streamer in streamer_status.keys():
+        print_streamer_status( streamer, streamer_status[ streamer ].value, streamer_max_length )
+
+#================================================
+
+def check_streamer_status( streamer ):
+
+    global streamer_status
+
+    should_retry = True
+    retry_count = 0
+
+    streamer_status[ streamer ] = StreamerStatus.checking
+
+    while should_retry == True and retry_count < retry_limit:
+
+        html_content = get_streamer_html_content( streamer )
+
+        if html_content.find( 'isLiveBroadcast' ) != -1:
+            streamer_status[ streamer ] = StreamerStatus.live
+
+            should_retry = False
+        else:
+            if html_content.find( streamer ) != -1:
+                streamer_status[ streamer ] = StreamerStatus.offline
+
                 should_retry = False
             else:
-                if html_content.find( streamer ) != -1:
-                    print_streamer_status( streamer, 'Offline', streamer_max_length )
-    
-                    should_retry = False
-                else:
-                    retry_count = retry_count + 1
+                retry_count = retry_count + 1
 
-                    time.sleep( retry_interval )
-    
-        if retry_count >= retry_limit:
-            print_streamer_status( streamer, 'Not Found', streamer_max_length )
+                time.sleep( retry_interval )
+
+    if retry_count >= retry_limit:
+        streamer_status[ streamer ] = StreamerStatus.not_found
 
 #================================================
 
@@ -104,6 +145,14 @@ def read_streamer_list_file( filepath ):
     file.close()
 
     return file_text
+
+#================================================
+
+def clear_screen():
+    if os.name == 'nt':
+        os.system( 'cls' )
+    else:
+        os.system( 'clear') 
 
 #================================================
 
