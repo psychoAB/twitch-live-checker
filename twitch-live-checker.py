@@ -40,7 +40,7 @@ def main():
 
     file_text = read_streamer_list_file( filepath )
     
-    streamer_list = parse_streamer_list_file( file_text )
+    ( streamer_list, username_non_valid_list ) = parse_streamer_list_file( file_text )
     
     streamer_max_length = max( map( len, streamer_list ) )
 
@@ -56,12 +56,18 @@ def main():
         for streamer in streamer_status.keys():
             print_streamer_status( streamer, streamer_status[ streamer ].value, streamer_max_length )
 
+        for username in username_non_valid_list:
+            print_to_stderr( '"' + username + '"' + " does NOT follow the Twitch's username rules." )
+
         time.sleep( main_thread_interval )
 
         clear_screen()
 
     for streamer in streamer_status.keys():
         print_streamer_status( streamer, streamer_status[ streamer ].value, streamer_max_length )
+
+    for username in username_non_valid_list:
+        print_to_stderr( '"' + username + '"' + " does NOT follow the Twitch's username rules." )
 
 #================================================
 
@@ -122,13 +128,16 @@ def parse_streamer_list_file( file_text ):
 
     streamer_list = streamer_list[ 0 : -1 ]
 
+    username_non_valid_list = []
+
     for streamer in streamer_list:
         if re.fullmatch( '[a-zA-Z0-9]\w{3,24}', streamer ) == None:
-            streamer_list.remove( streamer )
+            username_non_valid_list.append( streamer )
 
-            print_to_stderr( '"' + streamer + '"' + " does NOT follow the Twitch's username rules." )
+    for username in username_non_valid_list:
+        streamer_list.remove( username )
 
-    return streamer_list
+    return ( streamer_list, username_non_valid_list )
 
 #================================================
 
