@@ -106,10 +106,11 @@ def parse_streamer_list_file( file_text ):
 
     file_text_split = file_text_split[ 0 : -1 ]
 
-    if ( len( file_text_split ) > 0 ) and ( file_text_split[ 0 ].isdecimal() ):
-        thread_max = int( file_text_split[ 0 ] )
+    if len( file_text_split ) > 0:
+        if re.fullmatch( '[1-9][0-9]*', file_text_split[ 0 ] ) != None:
+            thread_max = int( file_text_split[ 0 ] )
 
-        file_text_split = file_text_split[ 1 : ]
+            file_text_split = file_text_split[ 1 : ]
 
     streamer_list = file_text_split
             
