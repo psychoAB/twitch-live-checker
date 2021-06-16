@@ -33,8 +33,6 @@ def main():
     if len( sys.argv ) > 1:
         filepath = sys.argv[ 1 ]
 
-    clear_screen()
-
     file_text = read_streamer_list_file( filepath )
     
     ( streamer_list, username_non_valid_list ) = parse_streamer_list_file( file_text )
@@ -43,16 +41,14 @@ def main():
 
     streamer_list.reverse()
 
-    while ( len( streamer_list ) > 0 ) | ( threading.activeCount() > 1 ):
+    while ( len( streamer_list ) > 0 ) or ( threading.activeCount() > 1 ):
 
-        while ( len( streamer_list ) > 0 ) & ( threading.activeCount() < thread_max + 1 ):
+        while ( len( streamer_list ) > 0 ) and ( threading.activeCount() < thread_max + 1 ):
             threading.Thread( target = check_streamer_status, args = ( streamer_list.pop(), streamer_status ) ).start()
 
         print_main_output( streamer_status, username_non_valid_list )
 
         time.sleep( main_thread_interval )
-
-        clear_screen()
 
     print_main_output( streamer_status, username_non_valid_list )
 
@@ -137,10 +133,15 @@ def read_streamer_list_file( filepath ):
 #================================================
 
 def print_main_output( streamer_status, username_non_valid_list ):
-    streamer_max_length = max( map( len, streamer_status.keys() ) )
+    if len( streamer_status ) > 0:
+        clear_screen()
 
-    for streamer in streamer_status.keys():
-        print_streamer_status( streamer, streamer_status[ streamer ].value, streamer_max_length )
+        streamer_max_length = max( map( len, streamer_status.keys() ) )
+
+        for streamer in streamer_status.keys():
+            print_streamer_status( streamer, streamer_status[ streamer ].value, streamer_max_length )
+    else:
+        print_to_stderr( 'The streamers list is empty.' )
 
     for username in username_non_valid_list:
         print_to_stderr( '"' + username + '"' + " does NOT follow the Twitch's username rules." )
