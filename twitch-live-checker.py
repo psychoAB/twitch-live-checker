@@ -17,8 +17,6 @@ retry_interval = 0.5
 main_thread_interval = 0.2
 thread_max = 4
 
-streamer_status = {}
-
 class StreamerStatus( enum.Enum ):
     waiting     = 'Waiting'
     checking    = 'Checking'
@@ -31,7 +29,6 @@ class StreamerStatus( enum.Enum ):
 def main():
 
     global filepath
-    global streamer_status
 
     if len( sys.argv ) > 1:
         filepath = sys.argv[ 1 ]
@@ -42,8 +39,6 @@ def main():
     
     ( streamer_list, username_non_valid_list ) = parse_streamer_list_file( file_text )
     
-    streamer_max_length = max( map( len, streamer_list ) )
-
     streamer_status = dict( zip( streamer_list, [ StreamerStatus.waiting ] * len( streamer_list ) ) )
 
     streamer_list.reverse()
@@ -51,30 +46,19 @@ def main():
     while ( len( streamer_list ) > 0 ) | ( threading.activeCount() > 1 ):
 
         while ( len( streamer_list ) > 0 ) & ( threading.activeCount() < thread_max + 1 ):
-            threading.Thread( target = check_streamer_status, args = ( streamer_list.pop(), ) ).start()
+            threading.Thread( target = check_streamer_status, args = ( streamer_list.pop(), streamer_status ) ).start()
 
-        for streamer in streamer_status.keys():
-            print_streamer_status( streamer, streamer_status[ streamer ].value, streamer_max_length )
-
-        for username in username_non_valid_list:
-            print_to_stderr( '"' + username + '"' + " does NOT follow the Twitch's username rules." )
+        print_main_output( streamer_status, username_non_valid_list )
 
         time.sleep( main_thread_interval )
 
         clear_screen()
 
-    for streamer in streamer_status.keys():
-        print_streamer_status( streamer, streamer_status[ streamer ].value, streamer_max_length )
-
-    for username in username_non_valid_list:
-        print_to_stderr( '"' + username + '"' + " does NOT follow the Twitch's username rules." )
+    print_main_output( streamer_status, username_non_valid_list )
 
 #================================================
 
-def check_streamer_status( streamer ):
-
-    global streamer_status
-
+def check_streamer_status( streamer, streamer_status ):
     should_retry = True
     retry_count = 0
 
@@ -100,11 +84,6 @@ def check_streamer_status( streamer ):
 
     if retry_count >= retry_limit:
         streamer_status[ streamer ] = StreamerStatus.not_found
-
-#================================================
-
-def print_streamer_status( streamer, status, streamer_max_length ):
-    print( '{}\t'.format( streamer.ljust( streamer_max_length ) ) + status )
 
 #================================================
 
@@ -157,16 +136,32 @@ def read_streamer_list_file( filepath ):
 
 #================================================
 
-def clear_screen():
-    if os.name == 'nt':
-        os.system( 'cls' )
-    else:
-        os.system( 'clear') 
+def print_main_output( streamer_status, username_non_valid_list ):
+    streamer_max_length = max( map( len, streamer_status.keys() ) )
+
+    for streamer in streamer_status.keys():
+        print_streamer_status( streamer, streamer_status[ streamer ].value, streamer_max_length )
+
+    for username in username_non_valid_list:
+        print_to_stderr( '"' + username + '"' + " does NOT follow the Twitch's username rules." )
+
+#================================================
+
+def print_streamer_status( streamer, status, streamer_max_length ):
+    print( '{}\t'.format( streamer.ljust( streamer_max_length ) ) + status )
 
 #================================================
 
 def print_to_stderr( message ):
     print( message, file = sys.stderr )
+
+#================================================
+
+def clear_screen():
+    if os.name == 'nt':
+        os.system( 'cls' )
+    else:
+        os.system( 'clear') 
 
 #================================================
 
