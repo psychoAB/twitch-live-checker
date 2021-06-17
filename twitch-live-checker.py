@@ -17,6 +17,8 @@ retry_interval = 0.5
 main_thread_interval = 0.2
 thread_max = 1
 
+is_disconnected = False
+
 class StreamerStatus( enum.Enum ):
     waiting     = 'Waiting'
     checking    = 'Checking'
@@ -50,7 +52,8 @@ def main():
 
         time.sleep( main_thread_interval )
 
-    print_main_output( streamer_status, username_non_valid_list )
+    if is_disconnected == False:
+        print_main_output( streamer_status, username_non_valid_list )
 
 #================================================
 
@@ -84,13 +87,19 @@ def check_streamer_status( streamer, streamer_status ):
 #================================================
 
 def get_streamer_html_content( streamer ):
+
+    global is_disconnected
+
     try:
         html_content = urllib.request.urlopen( 'https://www.twitch.tv/' + streamer ).read().decode( 'utf-8' )
     except urllib.error.URLError as error:
         if type( error.reason ) == socket.gaierror:
-            print_to_stderr( str( error ) )
+            if is_disconnected == False:
+                is_disconnected = True
 
-            print_to_stderr( 'Check your network connection.' )
+                print_to_stderr( str( error ) )
+
+                print_to_stderr( 'Check your network connection.' )
 
             quit( error.reason.errno )
 
