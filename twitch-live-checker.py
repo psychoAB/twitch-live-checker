@@ -110,10 +110,10 @@ def get_streamer_html_content( streamer ):
 def parse_streamer_list_file( file_text ):
 
     global thread_max
-    
+
     file_text_split = file_text.split( '\n' )
 
-    file_text_split = file_text_split[ 0 : -1 ]
+    file_text_split = list( filter( lambda line : line != '', file_text_split ) )
 
     if len( file_text_split ) > 0:
         if re.fullmatch( '[1-9][0-9]*', file_text_split[ 0 ] ) != None:
@@ -122,7 +122,7 @@ def parse_streamer_list_file( file_text ):
             file_text_split = file_text_split[ 1 : ]
 
     streamer_list = file_text_split
-            
+
     username_non_valid_list = []
 
     for streamer in streamer_list:
