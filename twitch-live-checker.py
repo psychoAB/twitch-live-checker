@@ -37,7 +37,7 @@ def main():
 
     file_text = read_streamer_list_file( filepath )
     
-    ( streamer_list, username_non_valid_list ) = parse_streamer_list_file( file_text )
+    ( streamer_list, username_not_valid_list ) = parse_streamer_list_file( file_text )
     
     streamer_status = dict( zip( streamer_list, [ StreamerStatus.waiting ] * len( streamer_list ) ) )
 
@@ -48,12 +48,12 @@ def main():
         while ( len( streamer_list ) > 0 ) and ( threading.activeCount() < thread_max + 1 ):
             threading.Thread( target = check_streamer_status, args = ( streamer_list.pop(), streamer_status ) ).start()
 
-        print_main_output( streamer_status, username_non_valid_list )
+        print_main_output( streamer_status, username_not_valid_list )
 
         time.sleep( main_thread_interval )
 
     if is_disconnected == False:
-        print_main_output( streamer_status, username_non_valid_list )
+        print_main_output( streamer_status, username_not_valid_list )
 
 #================================================
 
@@ -111,28 +111,20 @@ def parse_streamer_list_file( file_text ):
 
     global thread_max
 
-    file_text_split = file_text.split( '\n' )
+    file_text_line = file_text.split( '\n' )
 
-    file_text_split = list( filter( lambda line : line != '', file_text_split ) )
+    file_text_line = list( filter( lambda line : line != '', file_text_line ) )
 
-    if len( file_text_split ) > 0:
-        if re.fullmatch( '[1-9][0-9]*', file_text_split[ 0 ] ) != None:
-            thread_max = int( file_text_split[ 0 ] )
+    if len( file_text_line ) > 0:
+        if re.fullmatch( '[1-9][0-9]*', file_text_line[ 0 ] ) != None:
+            thread_max = int( file_text_line[ 0 ] )
 
-            file_text_split = file_text_split[ 1 : ]
+            file_text_line = file_text_line[ 1 : ]
 
-    streamer_list = file_text_split
+    username_not_valid_list = list( filter( lambda line : re.fullmatch( '[a-zA-Z0-9]\w{3,24}', line ) == None , file_text_line ) )
+    streamer_list = list( filter( lambda line : line not in username_not_valid_list , file_text_line ) )
 
-    username_non_valid_list = []
-
-    for streamer in streamer_list:
-        if re.fullmatch( '[a-zA-Z0-9]\w{3,24}', streamer ) == None:
-            username_non_valid_list.append( streamer )
-
-    for username in username_non_valid_list:
-        streamer_list.remove( username )
-
-    return ( streamer_list, username_non_valid_list )
+    return ( streamer_list, username_not_valid_list )
 
 #================================================
 
@@ -152,7 +144,7 @@ def read_streamer_list_file( filepath ):
 
 #================================================
 
-def print_main_output( streamer_status, username_non_valid_list ):
+def print_main_output( streamer_status, username_not_valid_list ):
     if len( streamer_status ) > 0:
         clear_screen()
 
@@ -163,7 +155,7 @@ def print_main_output( streamer_status, username_non_valid_list ):
     else:
         print_to_stderr( 'The streamers list is empty.' )
 
-    for username in username_non_valid_list:
+    for username in username_not_valid_list:
         print_to_stderr( '"' + username + '"' + " does NOT follow the Twitch's username rules." )
 
 #================================================
