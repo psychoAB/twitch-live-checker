@@ -39,41 +39,41 @@ def main():
     
     ( streamer_list, username_not_valid_list ) = parse_config_file( config_file_text )
     
-    streamer_status = dict( zip( streamer_list, [ StreamerStatus.waiting ] * len( streamer_list ) ) )
+    streamer_status_dict = dict( zip( streamer_list, [ StreamerStatus.waiting ] * len( streamer_list ) ) )
 
     streamer_list.reverse()
 
     while ( len( streamer_list ) > 0 ) or ( threading.activeCount() > 1 ):
 
         while ( len( streamer_list ) > 0 ) and ( threading.activeCount() < thread_max + 1 ):
-            threading.Thread( target = check_streamer_status, args = ( streamer_list.pop(), streamer_status ) ).start()
+            threading.Thread( target = check_streamer_status, args = ( streamer_list.pop(), streamer_status_dict ) ).start()
 
-        print_main_output( streamer_status, username_not_valid_list )
+        print_main_output( streamer_status_dict, username_not_valid_list )
 
         time.sleep( main_thread_interval )
 
     if is_disconnected == False:
-        print_main_output( streamer_status, username_not_valid_list )
+        print_main_output( streamer_status_dict, username_not_valid_list )
 
 #================================================
 
-def check_streamer_status( streamer, streamer_status ):
+def check_streamer_status( streamer, streamer_status_dict ):
     should_retry = True
     retry_count = 0
 
-    streamer_status[ streamer ] = StreamerStatus.checking
+    streamer_status_dict[ streamer ] = StreamerStatus.checking
 
     while should_retry == True and retry_count < retry_limit:
 
         html_content = get_streamer_html_content( streamer )
 
         if html_content.find( 'isLiveBroadcast' ) != -1:
-            streamer_status[ streamer ] = StreamerStatus.live
+            streamer_status_dict[ streamer ] = StreamerStatus.live
 
             should_retry = False
         else:
             if html_content.find( streamer ) != -1:
-                streamer_status[ streamer ] = StreamerStatus.offline
+                streamer_status_dict[ streamer ] = StreamerStatus.offline
 
                 should_retry = False
             else:
@@ -82,7 +82,7 @@ def check_streamer_status( streamer, streamer_status ):
                 time.sleep( retry_interval )
 
     if retry_count >= retry_limit:
-        streamer_status[ streamer ] = StreamerStatus.not_found
+        streamer_status_dict[ streamer ] = StreamerStatus.not_found
 
 #================================================
 
@@ -144,24 +144,24 @@ def read_config_file( config_file_path ):
 
 #================================================
 
-def print_main_output( streamer_status, username_not_valid_list ):
-    if len( streamer_status ) > 0:
+def print_main_output( streamer_status_dict, username_not_valid_list ):
+    if len( streamer_status_dict ) > 0:
         clear_screen()
 
-        streamer_max_length = max( map( len, streamer_status.keys() ) )
+        streamer_string_length_max = max( map( len, streamer_status_dict.keys() ) )
 
-        for streamer in streamer_status.keys():
-            print_streamer_status( streamer, streamer_status[ streamer ].value, streamer_max_length )
+        for streamer in streamer_status_dict.keys():
+            print_streamer_status( streamer, streamer_status_dict[ streamer ].value, streamer_string_length_max )
     else:
-        print_to_stderr( 'The streamers list is empty.' )
+        print_to_stderr( 'No streamer to check, check your configuration file.' )
 
     for username in username_not_valid_list:
         print_to_stderr( '"' + username + '"' + " does NOT follow the Twitch's username rules." )
 
 #================================================
 
-def print_streamer_status( streamer, status, streamer_max_length ):
-    print( '{}\t'.format( streamer.ljust( streamer_max_length ) ) + status )
+def print_streamer_status( streamer, streamer_status, streamer_string_length_max ):
+    print( '{}\t'.format( streamer.ljust( streamer_string_length_max ) ) + streamer_status )
 
 #================================================
 
