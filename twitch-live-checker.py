@@ -11,11 +11,12 @@ import pathlib
 
 #================================================
 
-CONFIG_FILE_PATH = pathlib.Path.home() / pathlib.Path( '.twitch-live-checker.conf' )
 RETRY_LIMIT = 3
 RETRY_INTERVAL = 0.5
 MAIN_THREAD_INTERVAL = 0.2
-THREAD_NUM_MAX = 1
+
+DEFAULT_CONFIG_FILE_PATH = pathlib.Path.home() / pathlib.Path( '.twitch-live-checker.conf' )
+DEFAULT_THREAD_NUM_MAX = 1
 
 is_disconnected = False
 
@@ -30,20 +31,20 @@ class StreamerStatus( enum.Enum ):
 
 def main():
 
-    global CONFIG_FILE_PATH
-
     if len( sys.argv ) > 1:
-        CONFIG_FILE_PATH = sys.argv[ 1 ]
+        config_file_path = sys.argv[ 1 ]
+    else:
+        config_file_path = DEFAULT_CONFIG_FILE_PATH
 
-    config_file_text = read_config_file( CONFIG_FILE_PATH )
+    config_file_text = read_config_file( config_file_path )
     
-    ( streamer_list, username_not_valid_list ) = parse_config_file( config_file_text )
+    ( thread_num_max, streamer_list, username_not_valid_list ) = parse_config_file( config_file_text )
     
     streamer_status_dict = dict.fromkeys( streamer_list, StreamerStatus.waiting )
 
     while ( len( streamer_list ) > 0 ) or ( threading.activeCount() > 1 ):
 
-        while ( len( streamer_list ) > 0 ) and ( threading.activeCount() < THREAD_NUM_MAX + 1 ):
+        while ( len( streamer_list ) > 0 ) and ( threading.activeCount() < thread_num_max + 1 ):
             threading.Thread( target = check_streamer_status, args = ( streamer_list.pop( 0 ), streamer_status_dict ) ).start()
 
         print_main_output( streamer_status_dict, username_not_valid_list )
@@ -107,22 +108,22 @@ def get_streamer_html_content( streamer ):
 
 def parse_config_file( config_file_text ):
 
-    global THREAD_NUM_MAX
-
     config_file_text_line = config_file_text.split( '\n' )
 
     config_file_text_line = list( filter( lambda line : line != '', config_file_text_line ) )
 
     if len( config_file_text_line ) > 0:
         if re.fullmatch( '[1-9][0-9]*', config_file_text_line[ 0 ] ) != None:
-            THREAD_NUM_MAX = int( config_file_text_line[ 0 ] )
+            thread_num_max = int( config_file_text_line[ 0 ] )
 
             config_file_text_line = config_file_text_line[ 1 : ]
+        else:
+            thread_num_max = DEFAULT_THREAD_NUM_MAX
 
     username_not_valid_list = list( filter( lambda line : re.fullmatch( '[a-zA-Z0-9]\w{3,24}', line ) == None , config_file_text_line ) )
     streamer_list = list( filter( lambda line : line not in username_not_valid_list , config_file_text_line ) )
 
-    return ( streamer_list, username_not_valid_list )
+    return ( thread_num_max, streamer_list, username_not_valid_list )
 
 #================================================
 
