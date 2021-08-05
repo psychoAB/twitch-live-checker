@@ -65,14 +65,14 @@ def check_streamer_status( streamer, streamer_status_dict ):
 
     while should_retry == True and retry_count < retry_limit:
 
-        html_content = get_streamer_html_content( streamer )
+        streamer_html_content= get_streamer_html_content( streamer )
 
-        if html_content.find( 'isLiveBroadcast' ) != -1:
+        if streamer_html_content.find( 'isLiveBroadcast' ) != -1:
             streamer_status_dict[ streamer ] = StreamerStatus.live
 
             should_retry = False
         else:
-            if html_content.find( streamer ) != -1:
+            if streamer_html_content.find( streamer ) != -1:
                 streamer_status_dict[ streamer ] = StreamerStatus.offline
 
                 should_retry = False
@@ -91,7 +91,7 @@ def get_streamer_html_content( streamer ):
     global is_disconnected
 
     try:
-        html_content = urllib.request.urlopen( 'https://www.twitch.tv/' + streamer ).read().decode( 'utf-8' )
+        streamer_html_content = urllib.request.urlopen( 'https://www.twitch.tv/' + streamer ).read().decode( 'utf-8' )
     except urllib.error.URLError as error:
         if type( error.reason ) == socket.gaierror:
             if is_disconnected == False:
@@ -103,7 +103,7 @@ def get_streamer_html_content( streamer ):
 
             quit( error.reason.errno )
 
-    return html_content
+    return streamer_html_content
 
 #================================================
 
