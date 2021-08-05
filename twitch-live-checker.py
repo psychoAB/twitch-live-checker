@@ -39,14 +39,12 @@ def main():
     
     ( streamer_list, username_not_valid_list ) = parse_config_file( config_file_text )
     
-    streamer_status_dict = dict( zip( streamer_list, [ StreamerStatus.waiting ] * len( streamer_list ) ) )
-
-    streamer_list.reverse()
+    streamer_status_dict = dict.fromkeys( streamer_list, StreamerStatus.waiting )
 
     while ( len( streamer_list ) > 0 ) or ( threading.activeCount() > 1 ):
 
         while ( len( streamer_list ) > 0 ) and ( threading.activeCount() < thread_max + 1 ):
-            threading.Thread( target = check_streamer_status, args = ( streamer_list.pop(), streamer_status_dict ) ).start()
+            threading.Thread( target = check_streamer_status, args = ( streamer_list.pop( 0 ), streamer_status_dict ) ).start()
 
         print_main_output( streamer_status_dict, username_not_valid_list )
 
