@@ -11,7 +11,7 @@ import pathlib
 
 #================================================
 
-filepath = pathlib.Path.home() / pathlib.Path( '.twitch-live-checker.conf' )
+config_file_path = pathlib.Path.home() / pathlib.Path( '.twitch-live-checker.conf' )
 retry_limit = 3
 retry_interval = 0.5
 main_thread_interval = 0.2
@@ -30,14 +30,14 @@ class StreamerStatus( enum.Enum ):
 
 def main():
 
-    global filepath
+    global config_file_path
 
     if len( sys.argv ) > 1:
-        filepath = sys.argv[ 1 ]
+        config_file_path = sys.argv[ 1 ]
 
-    file_text = read_streamer_list_file( filepath )
+    config_file_text = read_config_file( config_file_path )
     
-    ( streamer_list, username_not_valid_list ) = parse_streamer_list_file( file_text )
+    ( streamer_list, username_not_valid_list ) = parse_config_file( config_file_text )
     
     streamer_status = dict( zip( streamer_list, [ StreamerStatus.waiting ] * len( streamer_list ) ) )
 
@@ -107,40 +107,40 @@ def get_streamer_html_content( streamer ):
 
 #================================================
 
-def parse_streamer_list_file( file_text ):
+def parse_config_file( config_file_text ):
 
     global thread_max
 
-    file_text_line = file_text.split( '\n' )
+    config_file_text_line = config_file_text.split( '\n' )
 
-    file_text_line = list( filter( lambda line : line != '', file_text_line ) )
+    config_file_text_line = list( filter( lambda line : line != '', config_file_text_line ) )
 
-    if len( file_text_line ) > 0:
-        if re.fullmatch( '[1-9][0-9]*', file_text_line[ 0 ] ) != None:
-            thread_max = int( file_text_line[ 0 ] )
+    if len( config_file_text_line ) > 0:
+        if re.fullmatch( '[1-9][0-9]*', config_file_text_line[ 0 ] ) != None:
+            thread_max = int( config_file_text_line[ 0 ] )
 
-            file_text_line = file_text_line[ 1 : ]
+            config_file_text_line = config_file_text_line[ 1 : ]
 
-    username_not_valid_list = list( filter( lambda line : re.fullmatch( '[a-zA-Z0-9]\w{3,24}', line ) == None , file_text_line ) )
-    streamer_list = list( filter( lambda line : line not in username_not_valid_list , file_text_line ) )
+    username_not_valid_list = list( filter( lambda line : re.fullmatch( '[a-zA-Z0-9]\w{3,24}', line ) == None , config_file_text_line ) )
+    streamer_list = list( filter( lambda line : line not in username_not_valid_list , config_file_text_line ) )
 
     return ( streamer_list, username_not_valid_list )
 
 #================================================
 
-def read_streamer_list_file( filepath ):
+def read_config_file( config_file_path ):
     try:
-        file = open( filepath, 'r' )
+        config_file = open( config_file_path, 'r' )
     except FileNotFoundError as error:
         print_to_stderr( str( error ) )
     
         quit( error.errno )
     
-    file_text = file.read()
+    config_file_text = config_file.read()
     
-    file.close()
+    config_file.close()
 
-    return file_text
+    return config_file_text
 
 #================================================
 
