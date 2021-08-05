@@ -38,7 +38,7 @@ def main():
 
     config_file_text = read_config_file( config_file_path )
     
-    ( thread_num_max, streamer_list, username_not_valid_list ) = parse_config_file( config_file_text )
+    ( thread_num_max, streamer_list, username_not_valid_list ) = parse_config( config_file_text )
     
     streamer_status_dict = dict.fromkeys( streamer_list, StreamerStatus.waiting )
 
@@ -106,7 +106,7 @@ def get_streamer_html_content( streamer ):
 
 #================================================
 
-def parse_config_file( config_file_text ):
+def parse_config( config_file_text ):
 
     config_file_text_line = config_file_text.split( '\n' )
 
