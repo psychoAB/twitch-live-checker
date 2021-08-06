@@ -1,4 +1,5 @@
 #!/bin/python
+
 import urllib.request
 import sys
 import socket
@@ -14,6 +15,7 @@ import pathlib
 RETRY_LIMIT = 3
 RETRY_INTERVAL = 0.5
 MAIN_THREAD_INTERVAL = 0.2
+REQUEST_PER_SECOND_LIMIT = 5
 
 DEFAULT_CONFIG_FILE_PATH = pathlib.Path.home() / pathlib.Path( '.twitch-live-checker.conf' )
 DEFAULT_THREAD_NUM_MAX = 1
@@ -42,12 +44,25 @@ def main():
     
     streamer_status_dict = dict.fromkeys( streamer_list, StreamerStatus.waiting )
 
+    request_count = 0
+    
+    time_request_count_refresh_prev = time.time()
+    
     while ( len( streamer_list ) > 0 ) or ( threading.activeCount() > 1 ):
 
-        while ( len( streamer_list ) > 0 ) and ( threading.activeCount() < thread_num_max + 1 ):
+        while ( len( streamer_list ) > 0 ) and ( threading.activeCount() < thread_num_max + 1 ) and ( request_count < REQUEST_PER_SECOND_LIMIT ):
             threading.Thread( target = check_streamer_status, args = ( streamer_list.pop( 0 ), streamer_status_dict ) ).start()
 
+            request_count += 1;
+
         print_main_output( streamer_status_dict, username_not_valid_list )
+
+        time_current = time.time()
+
+        if ( time_current - time_request_count_refresh_prev ) >= 1:
+            request_count = 0;
+
+            time_request_count_refresh_prev = time_current
 
         time.sleep( MAIN_THREAD_INTERVAL )
 
@@ -64,7 +79,7 @@ def check_streamer_status( streamer, streamer_status_dict ):
 
     while should_retry == True and retry_count < RETRY_LIMIT:
 
-        streamer_html_content= get_streamer_html_content( streamer )
+        streamer_html_content = get_streamer_html_content( streamer )
 
         if streamer_html_content.find( 'isLiveBroadcast' ) != -1:
             streamer_status_dict[ streamer ] = StreamerStatus.live
@@ -76,7 +91,7 @@ def check_streamer_status( streamer, streamer_status_dict ):
 
                 should_retry = False
             else:
-                retry_count = retry_count + 1
+                retry_count += 1
 
                 time.sleep( RETRY_INTERVAL )
 
