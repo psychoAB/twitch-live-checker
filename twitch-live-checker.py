@@ -13,7 +13,7 @@ import queue
 
 #================================================
 
-RETRY_LIMIT = 3
+RETRY_LIMIT = 5
 RETRY_INTERVAL = 0.5
 MAIN_THREAD_INTERVAL = 0.2
 REQUEST_PER_SECOND_LIMIT = 5
