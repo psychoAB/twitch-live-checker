@@ -9,6 +9,7 @@ import os
 import threading
 import enum
 import pathlib
+import queue
 
 #================================================
 
@@ -20,11 +21,14 @@ REQUEST_PER_SECOND_LIMIT = 5
 DEFAULT_CONFIG_FILE_PATH = pathlib.Path.home() / pathlib.Path( '.twitch-live-checker.conf' )
 DEFAULT_THREAD_NUM_MAX = 1
 
+streamer_queue = queue.SimpleQueue()
+
 is_disconnected = False
 
 class StreamerStatus( enum.Enum ):
     waiting     = 'Waiting'
     checking    = 'Checking'
+    retrying    = 'Retrying'
     live        = 'Live'
     offline     = 'Offline'
     not_found   = 'Not Found'
@@ -43,17 +47,28 @@ def main():
     ( thread_num_max, streamer_list, username_not_valid_list ) = parse_config( config_file_text )
     
     streamer_status_dict = dict.fromkeys( streamer_list, StreamerStatus.waiting )
+    streamer_retry_count_dict = dict.fromkeys( streamer_list, 0 )
+
+    for streamer in streamer_list:
+        streamer_queue.put( streamer )
 
     request_count = 0
     
     time_request_count_refresh_prev = time.time()
     
-    while ( len( streamer_list ) > 0 ) or ( threading.activeCount() > 1 ):
+    while ( streamer_queue.empty() == False ) or ( threading.activeCount() > 1 ):
 
-        while ( len( streamer_list ) > 0 ) and ( threading.activeCount() < thread_num_max + 1 ) and ( request_count < REQUEST_PER_SECOND_LIMIT ):
-            threading.Thread( target = check_streamer_status, args = ( streamer_list.pop( 0 ), streamer_status_dict ) ).start()
+        while ( streamer_queue.empty() == False ) and ( threading.activeCount() < thread_num_max + 1 ) and ( request_count < REQUEST_PER_SECOND_LIMIT ):
+            streamer = streamer_queue.get()
 
-            request_count += 1;
+            if streamer_retry_count_dict[ streamer ] < RETRY_LIMIT:
+                threading.Thread( target = check_streamer_status, args = ( streamer, streamer_status_dict ) ).start()
+                
+                streamer_retry_count_dict[ streamer ] += 1
+                
+                request_count += 1;
+            else:
+                streamer_status_dict[ streamer ] = StreamerStatus.not_found
 
         print_main_output( streamer_status_dict, username_not_valid_list )
 
@@ -72,31 +87,21 @@ def main():
 #================================================
 
 def check_streamer_status( streamer, streamer_status_dict ):
-    should_retry = True
-    retry_count = 0
-
     streamer_status_dict[ streamer ] = StreamerStatus.checking
 
-    while should_retry == True and retry_count < RETRY_LIMIT:
+    streamer_html_content = get_streamer_html_content( streamer )
 
-        streamer_html_content = get_streamer_html_content( streamer )
-
-        if streamer_html_content.find( 'isLiveBroadcast' ) != -1:
-            streamer_status_dict[ streamer ] = StreamerStatus.live
-
-            should_retry = False
+    if streamer_html_content.find( 'isLiveBroadcast' ) != -1:
+        streamer_status_dict[ streamer ] = StreamerStatus.live
+    else:
+        if streamer_html_content.find( streamer ) != -1:
+            streamer_status_dict[ streamer ] = StreamerStatus.offline
         else:
-            if streamer_html_content.find( streamer ) != -1:
-                streamer_status_dict[ streamer ] = StreamerStatus.offline
+            streamer_status_dict[ streamer ] = StreamerStatus.retrying
 
-                should_retry = False
-            else:
-                retry_count += 1
+            time.sleep( RETRY_INTERVAL )
 
-                time.sleep( RETRY_INTERVAL )
-
-    if retry_count >= RETRY_LIMIT:
-        streamer_status_dict[ streamer ] = StreamerStatus.not_found
+            streamer_queue.put( streamer )
 
 #================================================
 
