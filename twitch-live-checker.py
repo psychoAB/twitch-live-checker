@@ -33,8 +33,9 @@ class StreamerStatus( enum.Enum ):
 
 #================================================
 
-request_count_lock = threading.Lock()
+lock_request_count = threading.Lock()
 lock_streamer_status_dict = threading.Lock()
+lock_time_streamer_request_prev_dict = threading.Lock()
 
 streamer_queue = queue.SimpleQueue()
 
@@ -59,6 +60,7 @@ def main():
     
     streamer_status_dict = dict.fromkeys( streamer_list, StreamerStatus.waiting )
     streamer_retry_count_dict = dict.fromkeys( streamer_list, 0 )
+    time_streamer_request_prev_dict = dict.fromkeys( streamer_list, 0 )
 
     for streamer in streamer_list:
         streamer_queue.put( streamer )
@@ -70,16 +72,25 @@ def main():
         while ( streamer_queue.empty() == False ) and ( threading.activeCount() < thread_num_max + 1 ) and ( request_count < REQUEST_PER_SECOND_LIMIT ):
             streamer = streamer_queue.get()
 
-            if streamer_retry_count_dict[ streamer ] < RETRY_LIMIT:
-                threading.Thread( target = check_streamer_status, args = ( streamer, streamer_status_dict ) ).start()
-                
-                streamer_retry_count_dict[ streamer ] += 1
+            lock_time_streamer_request_prev_dict.acquire()
+
+            time_streamer_request_prev = time_streamer_request_prev_dict[ streamer ]
+
+            lock_time_streamer_request_prev_dict.release()
+
+            if ( time.time() - time_streamer_request_prev ) >= RETRY_INTERVAL:
+                if streamer_retry_count_dict[ streamer ] < RETRY_LIMIT:
+                    threading.Thread( target = check_streamer_status, args = ( streamer, streamer_status_dict, time_streamer_request_prev_dict ) ).start()
+                    
+                    streamer_retry_count_dict[ streamer ] += 1
+                else:
+                    lock_streamer_status_dict.acquire()
+
+                    streamer_status_dict[ streamer ] = StreamerStatus.not_found
+
+                    lock_streamer_status_dict.release()
             else:
-                lock_streamer_status_dict.acquire()
-
-                streamer_status_dict[ streamer ] = StreamerStatus.not_found
-
-                lock_streamer_status_dict.release()
+                streamer_queue.put( streamer )
 
         print_main_output( streamer_status_dict, username_not_valid_list )
 
@@ -87,11 +98,11 @@ def main():
 
         if ( time_current - time_request_count_refresh_prev ) >= 1:
             
-            request_count_lock.acquire()
+            lock_request_count.acquire()
 
-            request_count = 0;
+            request_count = 0
 
-            request_count_lock.release()
+            lock_request_count.release()
 
             time_request_count_refresh_prev = time_current
 
@@ -102,7 +113,7 @@ def main():
 
 #================================================
 
-def check_streamer_status( streamer, streamer_status_dict ):
+def check_streamer_status( streamer, streamer_status_dict, time_streamer_request_prev_dict ):
 
     global request_count
 
@@ -116,11 +127,17 @@ def check_streamer_status( streamer, streamer_status_dict ):
 
     streamer_html_content = get_streamer_html_content( streamer )
 
-    request_count_lock.acquire()
+    lock_request_count.acquire()
 
     request_count += 1
 
-    request_count_lock.release()
+    lock_request_count.release()
+
+    lock_time_streamer_request_prev_dict.acquire()
+
+    time_streamer_request_prev_dict[ streamer ] = time.time()
+
+    lock_time_streamer_request_prev_dict.release()
 
     if streamer_html_content.find( 'isLiveBroadcast' ) != -1:
         streamer_status = StreamerStatus.live
@@ -129,8 +146,6 @@ def check_streamer_status( streamer, streamer_status_dict ):
             streamer_status = StreamerStatus.offline
         else:
             streamer_status = StreamerStatus.retrying
-
-            time.sleep( RETRY_INTERVAL )
 
             streamer_queue.put( streamer )
     
