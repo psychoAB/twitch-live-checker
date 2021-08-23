@@ -34,6 +34,7 @@ class StreamerStatus( enum.Enum ):
 #================================================
 
 request_count_lock = threading.Lock()
+lock_streamer_status_dict = threading.Lock()
 
 streamer_queue = queue.SimpleQueue()
 
@@ -74,7 +75,11 @@ def main():
                 
                 streamer_retry_count_dict[ streamer ] += 1
             else:
+                lock_streamer_status_dict.acquire()
+
                 streamer_status_dict[ streamer ] = StreamerStatus.not_found
+
+                lock_streamer_status_dict.release()
 
         print_main_output( streamer_status_dict, username_not_valid_list )
 
@@ -101,7 +106,13 @@ def check_streamer_status( streamer, streamer_status_dict ):
 
     global request_count
 
+    lock_streamer_status_dict.acquire()
+    
     streamer_status_dict[ streamer ] = StreamerStatus.checking
+
+    lock_streamer_status_dict.release()
+
+    streamer_status = StreamerStatus.checking
 
     streamer_html_content = get_streamer_html_content( streamer )
 
@@ -112,16 +123,22 @@ def check_streamer_status( streamer, streamer_status_dict ):
     request_count_lock.release()
 
     if streamer_html_content.find( 'isLiveBroadcast' ) != -1:
-        streamer_status_dict[ streamer ] = StreamerStatus.live
+        streamer_status = StreamerStatus.live
     else:
         if streamer_html_content.find( streamer ) != -1:
-            streamer_status_dict[ streamer ] = StreamerStatus.offline
+            streamer_status = StreamerStatus.offline
         else:
-            streamer_status_dict[ streamer ] = StreamerStatus.retrying
+            streamer_status = StreamerStatus.retrying
 
             time.sleep( RETRY_INTERVAL )
 
             streamer_queue.put( streamer )
+    
+    lock_streamer_status_dict.acquire()
+    
+    streamer_status_dict[ streamer ] = streamer_status
+
+    lock_streamer_status_dict.release()
 
 #================================================
 
@@ -184,13 +201,24 @@ def read_config_file( config_file_path ):
 #================================================
 
 def print_main_output( streamer_status_dict, username_not_valid_list ):
-    if len( streamer_status_dict ) > 0:
+
+    lock_streamer_status_dict.acquire()
+
+    streamer_status_dict_length = len( streamer_status_dict )
+
+    lock_streamer_status_dict.release()
+
+    if streamer_status_dict_length > 0:
         clear_screen()
+
+        lock_streamer_status_dict.acquire()
 
         streamer_string_length_max = max( map( len, streamer_status_dict.keys() ) )
 
         for streamer in streamer_status_dict.keys():
             print_streamer_status( streamer, streamer_status_dict[ streamer ].value, streamer_string_length_max )
+
+        lock_streamer_status_dict.release()
     else:
         print_to_stderr( 'No streamer to check, check your configuration file.' )
 
