@@ -169,13 +169,13 @@ def parse_config( config_file_text ):
 
     config_file_text_line = list( filter( lambda line : line != '', config_file_text_line ) )
 
+    thread_num_max = DEFAULT_THREAD_NUM_MAX
+
     if len( config_file_text_line ) > 0:
         if re.fullmatch( '[1-9][0-9]*', config_file_text_line[ 0 ] ) != None:
             thread_num_max = int( config_file_text_line[ 0 ] )
 
             config_file_text_line = config_file_text_line[ 1 : ]
-        else:
-            thread_num_max = DEFAULT_THREAD_NUM_MAX
 
     username_not_valid_list = list( filter( lambda line : re.fullmatch( '[a-zA-Z0-9]\w{3,24}', line ) == None , config_file_text_line ) )
     streamer_list = list( filter( lambda line : line not in username_not_valid_list , config_file_text_line ) )
