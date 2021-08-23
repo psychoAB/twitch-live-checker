@@ -21,9 +21,7 @@ REQUEST_PER_SECOND_LIMIT = 5
 DEFAULT_CONFIG_FILE_PATH = pathlib.Path.home() / pathlib.Path( '.twitch-live-checker.conf' )
 DEFAULT_THREAD_NUM_MAX = 1
 
-streamer_queue = queue.SimpleQueue()
-
-is_disconnected = False
+#================================================
 
 class StreamerStatus( enum.Enum ):
     waiting     = 'Waiting'
@@ -35,7 +33,19 @@ class StreamerStatus( enum.Enum ):
 
 #================================================
 
+request_count_lock = threading.Lock()
+
+streamer_queue = queue.SimpleQueue()
+
+is_disconnected = False
+
+request_count = 0
+    
+#================================================
+
 def main():
+
+    global request_count
 
     if len( sys.argv ) > 1:
         config_file_path = sys.argv[ 1 ]
@@ -52,8 +62,6 @@ def main():
     for streamer in streamer_list:
         streamer_queue.put( streamer )
 
-    request_count = 0
-    
     time_request_count_refresh_prev = time.time()
     
     while ( streamer_queue.empty() == False ) or ( threading.activeCount() > 1 ):
@@ -65,8 +73,6 @@ def main():
                 threading.Thread( target = check_streamer_status, args = ( streamer, streamer_status_dict ) ).start()
                 
                 streamer_retry_count_dict[ streamer ] += 1
-                
-                request_count += 1;
             else:
                 streamer_status_dict[ streamer ] = StreamerStatus.not_found
 
@@ -75,7 +81,12 @@ def main():
         time_current = time.time()
 
         if ( time_current - time_request_count_refresh_prev ) >= 1:
+            
+            request_count_lock.acquire()
+
             request_count = 0;
+
+            request_count_lock.release()
 
             time_request_count_refresh_prev = time_current
 
@@ -87,9 +98,18 @@ def main():
 #================================================
 
 def check_streamer_status( streamer, streamer_status_dict ):
+
+    global request_count
+
     streamer_status_dict[ streamer ] = StreamerStatus.checking
 
     streamer_html_content = get_streamer_html_content( streamer )
+
+    request_count_lock.acquire()
+
+    request_count += 1
+
+    request_count_lock.release()
 
     if streamer_html_content.find( 'isLiveBroadcast' ) != -1:
         streamer_status_dict[ streamer ] = StreamerStatus.live
