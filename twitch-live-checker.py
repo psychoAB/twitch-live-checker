@@ -182,6 +182,8 @@ def get_streamer_html_content( streamer ):
                 print_to_stderr( 'Check your network connection.' )
 
             quit( error.reason.errno )
+        else:
+            raise error
 
     return streamer_html_content
 
