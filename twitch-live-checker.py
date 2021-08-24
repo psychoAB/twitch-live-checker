@@ -36,8 +36,11 @@ class StreamerStatus( enum.Enum ):
 lock_request_count = threading.Lock()
 lock_streamer_status_dict = threading.Lock()
 lock_time_streamer_request_prev_dict = threading.Lock()
+lock_streamer_retrying_list = threading.Lock()
 
 streamer_queue = queue.SimpleQueue()
+
+streamer_retrying_list = []
 
 is_disconnected = False
 
@@ -48,6 +51,7 @@ request_count = 0
 def main():
 
     global request_count
+    global streamer_retrying_list
 
     if len( sys.argv ) > 1:
         config_file_path = sys.argv[ 1 ]
@@ -67,30 +71,38 @@ def main():
 
     time_request_count_refresh_prev = time.time()
     
-    while ( streamer_queue.empty() == False ) or ( threading.activeCount() > 1 ):
+    while ( streamer_queue.empty() == False ) or ( threading.activeCount() > 1 ) or ( len( streamer_retrying_list ) > 0 ):
+
+        lock_streamer_retrying_list.acquire()
+        lock_time_streamer_request_prev_dict.acquire()
+
+        streamer_retrying_ready_list = list( filter( lambda streamer : ( time.time() - time_streamer_request_prev_dict[ streamer ] ) >= RETRY_INTERVAL, streamer_retrying_list ) )
+
+        lock_time_streamer_request_prev_dict.release()
+
+        streamer_retrying_list = list( filter( lambda streamer : streamer not in streamer_retrying_ready_list, streamer_retrying_list ) )
+
+        lock_streamer_retrying_list.release()
+
+        streamer_not_found_list = list( filter( lambda streamer : streamer_retry_count_dict[ streamer ] >= RETRY_LIMIT, streamer_retrying_ready_list ) )
+        streamer_retrying_ready_list = list( filter( lambda streamer : streamer not in streamer_not_found_list, streamer_retrying_ready_list ) )
+
+        for streamer in streamer_retrying_ready_list:
+            streamer_queue.put( streamer )
+
+        for streamer in streamer_not_found_list:
+            lock_streamer_status_dict.acquire()
+
+            streamer_status_dict[ streamer ] = StreamerStatus.not_found
+
+            lock_streamer_status_dict.release()
 
         while ( streamer_queue.empty() == False ) and ( threading.activeCount() < thread_num_max + 1 ) and ( request_count < REQUEST_PER_SECOND_LIMIT ):
             streamer = streamer_queue.get()
 
-            lock_time_streamer_request_prev_dict.acquire()
-
-            time_streamer_request_prev = time_streamer_request_prev_dict[ streamer ]
-
-            lock_time_streamer_request_prev_dict.release()
-
-            if ( time.time() - time_streamer_request_prev ) >= RETRY_INTERVAL:
-                if streamer_retry_count_dict[ streamer ] < RETRY_LIMIT:
-                    threading.Thread( target = check_streamer_status, args = ( streamer, streamer_status_dict, time_streamer_request_prev_dict ) ).start()
-                    
-                    streamer_retry_count_dict[ streamer ] += 1
-                else:
-                    lock_streamer_status_dict.acquire()
-
-                    streamer_status_dict[ streamer ] = StreamerStatus.not_found
-
-                    lock_streamer_status_dict.release()
-            else:
-                streamer_queue.put( streamer )
+            threading.Thread( target = check_streamer_status, args = ( streamer, streamer_status_dict, time_streamer_request_prev_dict ) ).start()
+            
+            streamer_retry_count_dict[ streamer ] += 1
 
         print_main_output( streamer_status_dict, username_not_valid_list )
 
@@ -147,7 +159,11 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
         else:
             streamer_status = StreamerStatus.retrying
 
-            streamer_queue.put( streamer )
+            lock_streamer_retrying_list.acquire()
+
+            streamer_retrying_list.append( streamer )
+
+            lock_streamer_retrying_list.release()
     
     lock_streamer_status_dict.acquire()
     
@@ -217,13 +233,7 @@ def read_config_file( config_file_path ):
 
 def print_main_output( streamer_status_dict, username_not_valid_list ):
 
-    lock_streamer_status_dict.acquire()
-
-    streamer_status_dict_length = len( streamer_status_dict )
-
-    lock_streamer_status_dict.release()
-
-    if streamer_status_dict_length > 0:
+    if len( streamer_status_dict ) > 0:
         clear_screen()
 
         lock_streamer_status_dict.acquire()
