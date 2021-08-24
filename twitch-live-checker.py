@@ -53,14 +53,7 @@ def main():
     global request_count
     global streamer_retrying_list
 
-    if len( sys.argv ) > 1:
-        config_file_path = sys.argv[ 1 ]
-    else:
-        config_file_path = DEFAULT_CONFIG_FILE_PATH
-
-    config_file_text = read_config_file( config_file_path )
-    
-    ( thread_num_max, streamer_list, username_not_valid_list ) = parse_config( config_file_text )
+    ( thread_num_max, streamer_list, username_not_valid_list ) = get_config()
     
     streamer_status_dict = dict.fromkeys( streamer_list, StreamerStatus.waiting )
     streamer_retry_count_dict = dict.fromkeys( streamer_list, 0 )
@@ -191,6 +184,19 @@ def get_streamer_html_content( streamer ):
             quit( error.reason.errno )
 
     return streamer_html_content
+
+#================================================
+
+def get_config():
+
+    config_file_path = DEFAULT_CONFIG_FILE_PATH
+
+    if len( sys.argv ) > 1:
+        config_file_path = sys.argv[ 1 ]
+
+    config_file_text = read_config_file( config_file_path )
+
+    return parse_config( config_file_text )
 
 #================================================
 
