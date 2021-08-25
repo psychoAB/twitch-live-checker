@@ -33,7 +33,6 @@ class StreamerStatus( enum.Enum ):
 
 #================================================
 
-lock_request_count = threading.Lock()
 lock_streamer_status_dict = threading.Lock()
 lock_time_streamer_request_prev_dict = threading.Lock()
 lock_streamer_retrying_list = threading.Lock()
@@ -44,13 +43,10 @@ streamer_retrying_list = []
 
 is_disconnected = False
 
-request_count = 0
-    
 #================================================
 
 def main():
 
-    global request_count
     global streamer_retrying_list
 
     ( thread_num_max, streamer_list, username_not_valid_list ) = get_config()
@@ -63,6 +59,8 @@ def main():
         streamer_queue.put( streamer )
 
     time_request_count_refresh_prev = time.time()
+
+    request_count = 0
     
     while ( streamer_queue.empty() == False ) or ( threading.activeCount() > 1 ) or ( len( streamer_retrying_list ) > 0 ):
 
@@ -94,6 +92,8 @@ def main():
             streamer = streamer_queue.get()
 
             threading.Thread( target = check_streamer_status, args = ( streamer, streamer_status_dict, time_streamer_request_prev_dict ) ).start()
+
+            request_count += 1
             
             streamer_retry_count_dict[ streamer ] += 1
 
@@ -103,11 +103,7 @@ def main():
 
         if ( time_current - time_request_count_refresh_prev ) >= 1:
             
-            lock_request_count.acquire()
-
             request_count = 0
-
-            lock_request_count.release()
 
             time_request_count_refresh_prev = time_current
 
@@ -120,8 +116,6 @@ def main():
 
 def check_streamer_status( streamer, streamer_status_dict, time_streamer_request_prev_dict ):
 
-    global request_count
-
     lock_streamer_status_dict.acquire()
     
     streamer_status_dict[ streamer ] = StreamerStatus.checking
@@ -131,12 +125,6 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
     streamer_status = StreamerStatus.checking
 
     streamer_html_content = get_streamer_html_content( streamer )
-
-    lock_request_count.acquire()
-
-    request_count += 1
-
-    lock_request_count.release()
 
     lock_time_streamer_request_prev_dict.acquire()
 
