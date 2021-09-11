@@ -35,11 +35,8 @@ class StreamerStatus( enum.Enum ):
 
 lock_streamer_status_dict = threading.Lock()
 lock_time_streamer_request_prev_dict = threading.Lock()
-lock_streamer_retrying_list = threading.Lock()
 
 streamer_queue = queue.SimpleQueue()
-
-streamer_retrying_list = []
 
 is_disconnected = False
 
@@ -47,13 +44,11 @@ is_disconnected = False
 
 def main():
 
-    global streamer_retrying_list
-
     ( thread_num_max, streamer_list, username_not_valid_list ) = get_config()
     
     streamer_status_dict = dict.fromkeys( streamer_list, StreamerStatus.waiting )
     streamer_retry_count_dict = dict.fromkeys( streamer_list, 0 )
-    time_streamer_request_prev_dict = dict.fromkeys( streamer_list, 0 )
+    time_streamer_request_prev_dict = {}
 
     for streamer in streamer_list:
         streamer_queue.put( streamer )
@@ -62,18 +57,16 @@ def main():
 
     request_count = 0
     
-    while ( streamer_queue.empty() == False ) or ( threading.activeCount() > 1 ) or ( len( streamer_retrying_list ) > 0 ):
+    while ( streamer_queue.empty() == False ) or ( threading.activeCount() > 1 ) or ( len( time_streamer_request_prev_dict ) > 0 ):
 
-        lock_streamer_retrying_list.acquire()
         lock_time_streamer_request_prev_dict.acquire()
 
-        streamer_retrying_ready_list = list( filter( lambda streamer : ( time.time() - time_streamer_request_prev_dict[ streamer ] ) >= RETRY_INTERVAL, streamer_retrying_list ) )
+        streamer_retrying_ready_list = list( filter( lambda streamer : ( time.time() - time_streamer_request_prev_dict[ streamer ] ) >= RETRY_INTERVAL, time_streamer_request_prev_dict ) )
+
+        for streamer in streamer_retrying_ready_list:
+            del time_streamer_request_prev_dict[ streamer ]
 
         lock_time_streamer_request_prev_dict.release()
-
-        streamer_retrying_list = list( filter( lambda streamer : streamer not in streamer_retrying_ready_list, streamer_retrying_list ) )
-
-        lock_streamer_retrying_list.release()
 
         streamer_not_found_list = list( filter( lambda streamer : streamer_retry_count_dict[ streamer ] >= RETRY_LIMIT, streamer_retrying_ready_list ) )
         streamer_retrying_ready_list = list( filter( lambda streamer : streamer not in streamer_not_found_list, streamer_retrying_ready_list ) )
@@ -126,11 +119,7 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
 
     streamer_html_content = get_streamer_html_content( streamer )
 
-    lock_time_streamer_request_prev_dict.acquire()
-
-    time_streamer_request_prev_dict[ streamer ] = time.time()
-
-    lock_time_streamer_request_prev_dict.release()
+    time_streamer_request_prev = time.time()
 
     if streamer_html_content.find( 'isLiveBroadcast' ) != -1:
         streamer_status = StreamerStatus.live
@@ -140,12 +129,12 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
         else:
             streamer_status = StreamerStatus.retrying
 
-            lock_streamer_retrying_list.acquire()
+            lock_time_streamer_request_prev_dict.acquire()
 
-            streamer_retrying_list.append( streamer )
+            time_streamer_request_prev_dict[ streamer ] = time_streamer_request_prev
 
-            lock_streamer_retrying_list.release()
-    
+            lock_time_streamer_request_prev_dict.release()
+
     lock_streamer_status_dict.acquire()
     
     streamer_status_dict[ streamer ] = streamer_status
