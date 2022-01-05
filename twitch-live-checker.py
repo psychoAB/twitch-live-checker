@@ -38,7 +38,7 @@ lock_time_streamer_request_prev_dict = threading.Lock()
 
 streamer_queue = queue.SimpleQueue()
 
-is_disconnected = False
+thread_exception = None
 
 #================================================
 
@@ -57,7 +57,7 @@ def main():
 
     request_count = 0
     
-    while ( streamer_queue.empty() == False ) or ( threading.activeCount() > 1 ) or ( len( time_streamer_request_prev_dict ) > 0 ):
+    while ( ( streamer_queue.empty() == False ) or ( threading.active_count() > 1 ) or ( len( time_streamer_request_prev_dict ) > 0 ) ) and ( thread_exception == None ):
 
         lock_time_streamer_request_prev_dict.acquire()
 
@@ -81,7 +81,7 @@ def main():
 
             lock_streamer_status_dict.release()
 
-        while ( streamer_queue.empty() == False ) and ( threading.activeCount() < thread_num_max + 1 ) and ( request_count < REQUEST_PER_SECOND_LIMIT ):
+        while ( streamer_queue.empty() == False ) and ( threading.active_count() < thread_num_max + 1 ) and ( request_count < REQUEST_PER_SECOND_LIMIT ):
             streamer = streamer_queue.get()
 
             threading.Thread( target = check_streamer_status, args = ( streamer, streamer_status_dict, time_streamer_request_prev_dict ), daemon = True ).start()
@@ -102,8 +102,18 @@ def main():
 
         time.sleep( MAIN_THREAD_INTERVAL )
 
-    if is_disconnected == False:
-        print_main_output( streamer_status_dict, username_not_valid_list )
+    print_main_output( streamer_status_dict, username_not_valid_list )
+
+    if thread_exception != None:
+        if type( thread_exception ) == urllib.error.URLError:
+            if type( thread_exception.reason ) == socket.gaierror:
+                print_to_stderr( str( thread_exception ) )
+
+                print_to_stderr( 'Check your network connection.' )
+
+            quit( thread_exception.reason.errno )
+        else:
+            raise thread_exception
 
 #================================================
 
@@ -145,22 +155,14 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
 
 def get_streamer_html_content( streamer ):
 
-    global is_disconnected
+    global thread_exception
 
     try:
         streamer_html_content = urllib.request.urlopen( 'https://www.twitch.tv/' + streamer ).read().decode( 'utf-8' )
-    except urllib.error.URLError as error:
-        if type( error.reason ) == socket.gaierror:
-            if is_disconnected == False:
-                is_disconnected = True
+    except Exception as error:
+        thread_exception = error
 
-                print_to_stderr( str( error ) )
-
-                print_to_stderr( 'Check your network connection.' )
-
-            quit( error.reason.errno )
-        else:
-            raise error
+        quit()
 
     return streamer_html_content
 
