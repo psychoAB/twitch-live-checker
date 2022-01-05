@@ -57,7 +57,7 @@ def main():
 
     request_count = 0
     
-    while ( ( streamer_queue.empty() == False ) or ( threading.activeCount() > 1 ) or ( len( time_streamer_request_prev_dict ) > 0 ) ) and ( thread_exception == None ):
+    while ( ( streamer_queue.empty() == False ) or ( threading.active_count() > 1 ) or ( len( time_streamer_request_prev_dict ) > 0 ) ) and ( thread_exception == None ):
 
         lock_time_streamer_request_prev_dict.acquire()
 
@@ -81,7 +81,7 @@ def main():
 
             lock_streamer_status_dict.release()
 
-        while ( streamer_queue.empty() == False ) and ( threading.activeCount() < thread_num_max + 1 ) and ( request_count < REQUEST_PER_SECOND_LIMIT ):
+        while ( streamer_queue.empty() == False ) and ( threading.active_count() < thread_num_max + 1 ) and ( request_count < REQUEST_PER_SECOND_LIMIT ):
             streamer = streamer_queue.get()
 
             threading.Thread( target = check_streamer_status, args = ( streamer, streamer_status_dict, time_streamer_request_prev_dict ), daemon = True ).start()
