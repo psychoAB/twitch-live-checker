@@ -166,6 +166,8 @@ def get_streamer_html_content( streamer ):
             thread_exception = error
 
             quit()
+    except TimeoutError as error:
+        streamer_html_content = ''
     except Exception as error:
         thread_exception = error
 
