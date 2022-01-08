@@ -17,6 +17,7 @@ RETRY_LIMIT = 5
 RETRY_INTERVAL = 0.5
 MAIN_THREAD_INTERVAL = 0.2
 REQUEST_PER_SECOND_LIMIT = 5
+REQUEST_TIMEOUT = 3
 
 DEFAULT_CONFIG_FILE_PATH = pathlib.Path.home() / pathlib.Path( '.twitch-live-checker.conf' )
 DEFAULT_THREAD_NUM_MAX = 1
@@ -105,11 +106,10 @@ def main():
     print_main_output( streamer_status_dict, username_not_valid_list )
 
     if thread_exception != None:
-        if type( thread_exception ) == urllib.error.URLError:
-            if type( thread_exception.reason ) == socket.gaierror:
-                print_to_stderr( str( thread_exception ) )
+        if ( type( thread_exception ) == urllib.error.URLError ) and ( type( thread_exception.reason ) == socket.gaierror ):
+            print_to_stderr( str( thread_exception ) )
 
-                print_to_stderr( 'Check your network connection.' )
+            print_to_stderr( 'Check your network connection.' )
 
             quit( thread_exception.reason.errno )
         else:
@@ -158,7 +158,14 @@ def get_streamer_html_content( streamer ):
     global thread_exception
 
     try:
-        streamer_html_content = urllib.request.urlopen( 'https://www.twitch.tv/' + streamer ).read().decode( 'utf-8' )
+        streamer_html_content = urllib.request.urlopen( 'https://www.twitch.tv/' + streamer, None, REQUEST_TIMEOUT ).read().decode( 'utf-8' )
+    except urllib.error.URLError as error:
+        if type( error.reason ) == TimeoutError:
+            streamer_html_content = ''
+        else:
+            thread_exception = error
+
+            quit()
     except Exception as error:
         thread_exception = error
 
