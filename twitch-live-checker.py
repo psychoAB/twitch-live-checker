@@ -10,6 +10,7 @@ import threading
 import enum
 import pathlib
 import queue
+import html
 
 #================================================
 
@@ -147,6 +148,7 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
             streamer_tag_position_end = streamer_html_content.find( '<', streamer_tag_position_start + 1 )
 
             streamer_tag = streamer_html_content[ streamer_tag_position_start : streamer_tag_position_end ]
+            streamer_tag = html.unescape(streamer_tag)
     else:
         if streamer_html_content.find( streamer ) != -1:
             streamer_status = StreamerStatus.offline
