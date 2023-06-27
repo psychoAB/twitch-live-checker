@@ -175,6 +175,13 @@ def get_streamer_html_content( streamer ):
 
     try:
         streamer_html_content = urllib.request.urlopen( 'https://m.twitch.tv/' + streamer, None, REQUEST_TIMEOUT ).read().decode( 'utf-8' )
+    except urllib.error.HTTPError as error:
+        if error.code == 555:
+            streamer_html_content = ''
+        else:
+            thread_exception = error
+
+            quit()
     except urllib.error.URLError as error:
         if type( error.reason ) == TimeoutError:
             streamer_html_content = ''
@@ -284,7 +291,7 @@ def clear_screen():
     if os.name == 'nt':
         os.system( 'cls' )
     else:
-        os.system( 'clear') 
+        os.system( 'clear')
 
 #================================================
 
