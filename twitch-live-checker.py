@@ -10,6 +10,7 @@ import threading
 import enum
 import pathlib
 import queue
+import html
 
 #================================================
 
@@ -18,6 +19,7 @@ RETRY_INTERVAL = 0.5
 MAIN_THREAD_INTERVAL = 0.2
 REQUEST_PER_SECOND_LIMIT = 5
 REQUEST_TIMEOUT = 3
+TAG_NOT_FOUND_STRING = 'TAG_NOT_FOUND'
 
 DEFAULT_CONFIG_FILE_PATH = pathlib.Path.home() / pathlib.Path( '.twitch-live-checker.conf' )
 DEFAULT_THREAD_NUM_MAX = 1
@@ -43,11 +45,15 @@ thread_exception = None
 
 #================================================
 
+MAX_STREAMER_STATUS_ENUM_LENGTH = max( map( len, [ streamer_status_enum.value for streamer_status_enum in StreamerStatus ] ) )
+
+#================================================
+
 def main():
 
     ( thread_num_max, streamer_list, username_not_valid_list ) = get_config()
     
-    streamer_status_dict = dict.fromkeys( streamer_list, StreamerStatus.waiting )
+    streamer_status_dict = { streamer : [ StreamerStatus.waiting, TAG_NOT_FOUND_STRING ] for streamer in streamer_list }
     streamer_retry_count_dict = dict.fromkeys( streamer_list, 0 )
     time_streamer_request_prev_dict = {}
 
@@ -78,7 +84,7 @@ def main():
         for streamer in streamer_not_found_list:
             lock_streamer_status_dict.acquire()
 
-            streamer_status_dict[ streamer ] = StreamerStatus.not_found
+            streamer_status_dict[ streamer ][ 0 ] = StreamerStatus.not_found
 
             lock_streamer_status_dict.release()
 
@@ -121,11 +127,12 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
 
     lock_streamer_status_dict.acquire()
     
-    streamer_status_dict[ streamer ] = StreamerStatus.checking
+    streamer_status_dict[ streamer ][ 0 ] = StreamerStatus.checking
 
     lock_streamer_status_dict.release()
 
     streamer_status = StreamerStatus.checking
+    streamer_tag = TAG_NOT_FOUND_STRING
 
     streamer_html_content = get_streamer_html_content( streamer )
 
@@ -133,6 +140,15 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
 
     if streamer_html_content.find( 'isLiveBroadcast' ) != -1:
         streamer_status = StreamerStatus.live
+
+        streamer_tag_position_start = streamer_html_content.find( '/directory/game/' )
+
+        if streamer_tag_position_start != -1:
+            streamer_tag_position_start = streamer_html_content.find( '>', streamer_tag_position_start + 1 ) + 1
+            streamer_tag_position_end = streamer_html_content.find( '<', streamer_tag_position_start + 1 )
+
+            streamer_tag = streamer_html_content[ streamer_tag_position_start : streamer_tag_position_end ]
+            streamer_tag = html.unescape(streamer_tag)
     else:
         if streamer_html_content.find( streamer ) != -1:
             streamer_status = StreamerStatus.offline
@@ -147,7 +163,7 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
 
     lock_streamer_status_dict.acquire()
     
-    streamer_status_dict[ streamer ] = streamer_status
+    streamer_status_dict[ streamer ] = [ streamer_status, streamer_tag ]
 
     lock_streamer_status_dict.release()
 
@@ -158,7 +174,14 @@ def get_streamer_html_content( streamer ):
     global thread_exception
 
     try:
-        streamer_html_content = urllib.request.urlopen( 'https://www.twitch.tv/' + streamer, None, REQUEST_TIMEOUT ).read().decode( 'utf-8' )
+        streamer_html_content = urllib.request.urlopen( 'https://m.twitch.tv/' + streamer, None, REQUEST_TIMEOUT ).read().decode( 'utf-8' )
+    except urllib.error.HTTPError as error:
+        if error.code == 555:
+            streamer_html_content = ''
+        else:
+            thread_exception = error
+
+            quit()
     except urllib.error.URLError as error:
         if type( error.reason ) == TimeoutError:
             streamer_html_content = ''
@@ -237,7 +260,7 @@ def print_main_output( streamer_status_dict, username_not_valid_list ):
         streamer_string_length_max = max( map( len, streamer_status_dict.keys() ) )
 
         for streamer in streamer_status_dict.keys():
-            print_streamer_status( streamer, streamer_status_dict[ streamer ].value, streamer_string_length_max )
+            print_streamer_status( streamer, streamer_status_dict[ streamer ][ 0 ].value, streamer_status_dict[ streamer ][ 1 ], streamer_string_length_max )
 
         lock_streamer_status_dict.release()
     else:
@@ -248,8 +271,14 @@ def print_main_output( streamer_status_dict, username_not_valid_list ):
 
 #================================================
 
-def print_streamer_status( streamer, streamer_status, streamer_string_length_max ):
-    print( '{}\t'.format( streamer.ljust( streamer_string_length_max ) ) + streamer_status )
+def print_streamer_status( streamer, streamer_status, streamer_tag, streamer_string_length_max ):
+    print( '{}\t'.format( streamer.ljust( streamer_string_length_max ) ), end = '' )
+    print( '{}\t'.format( streamer_status.ljust( MAX_STREAMER_STATUS_ENUM_LENGTH ) ), end = '' )
+
+    if streamer_status == StreamerStatus.live.value :
+        print( '[' + streamer_tag + ']' )
+    else:
+        print('')
 
 #================================================
 
@@ -262,7 +291,7 @@ def clear_screen():
     if os.name == 'nt':
         os.system( 'cls' )
     else:
-        os.system( 'clear') 
+        os.system( 'clear')
 
 #================================================
 
