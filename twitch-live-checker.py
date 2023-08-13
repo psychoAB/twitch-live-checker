@@ -124,7 +124,7 @@ def main():
 
             print_to_stderr( 'Check your network connection.' )
 
-            quit( thread_exception.reason.errno )
+            sys.exit( thread_exception.reason.errno )
         else:
             raise thread_exception
 
@@ -188,20 +188,20 @@ def get_streamer_html_content( streamer ):
         else:
             thread_exception = error
 
-            quit()
+            sys.exit()
     except urllib.error.URLError as error:
         if type( error.reason ) == TimeoutError:
             streamer_html_content = ''
         else:
             thread_exception = error
 
-            quit()
+            sys.exit()
     except TimeoutError as error:
         streamer_html_content = ''
     except Exception as error:
         thread_exception = error
 
-        quit()
+        sys.exit()
 
     return streamer_html_content
 
@@ -247,7 +247,7 @@ def read_config_file( config_file_path ):
     except FileNotFoundError as error:
         print_to_stderr( str( error ) )
     
-        quit( error.errno )
+        sys.exit( error.errno )
     
     config_file_text = config_file.read()
     
