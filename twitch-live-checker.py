@@ -16,7 +16,6 @@ import html
 
 RETRY_LIMIT = 5
 RETRY_INTERVAL = 0.5
-MAIN_THREAD_INTERVAL = 0.2
 REQUEST_PER_SECOND_LIMIT = 5
 REQUEST_TIMEOUT = 3
 TAG_NOT_FOUND_STRING = 'TAG_NOT_FOUND'
@@ -43,6 +42,8 @@ streamer_queue = queue.SimpleQueue()
 
 thread_exception = None
 
+should_stop = False
+
 #================================================
 
 MAX_STREAMER_STATUS_ENUM_LENGTH = max( map( len, [ streamer_status_enum.value for streamer_status_enum in StreamerStatus ] ) )
@@ -50,6 +51,8 @@ MAX_STREAMER_STATUS_ENUM_LENGTH = max( map( len, [ streamer_status_enum.value fo
 #================================================
 
 def main():
+
+    global should_stop
 
     ( thread_num_max, streamer_list, username_not_valid_list ) = get_config()
     
@@ -60,11 +63,22 @@ def main():
     for streamer in streamer_list:
         streamer_queue.put( streamer )
 
+    thread_render = threading.Thread( target = print_main_output_loop, args = ( streamer_status_dict, username_not_valid_list ), daemon = True )
+    thread_render.start()
+
     time_request_count_refresh_prev = time.time()
 
     request_count = 0
     
-    while ( ( streamer_queue.empty() == False ) or ( threading.active_count() > 1 ) or ( len( time_streamer_request_prev_dict ) > 0 ) ) and ( thread_exception == None ):
+    while ( ( streamer_queue.empty() == False ) or ( threading.active_count() > 2 ) or ( len( time_streamer_request_prev_dict ) > 0 ) ) and ( thread_exception == None ):
+
+        time_current = time.time()
+
+        if ( time_current - time_request_count_refresh_prev ) >= 1:
+
+            request_count = 0
+
+            time_request_count_refresh_prev = time_current
 
         lock_time_streamer_request_prev_dict.acquire()
 
@@ -88,7 +102,7 @@ def main():
 
             lock_streamer_status_dict.release()
 
-        while ( streamer_queue.empty() == False ) and ( threading.active_count() < thread_num_max + 1 ) and ( request_count < REQUEST_PER_SECOND_LIMIT ):
+        if ( streamer_queue.empty() == False ) and ( threading.active_count() < thread_num_max + 2 ) and ( request_count < REQUEST_PER_SECOND_LIMIT ):
             streamer = streamer_queue.get()
 
             threading.Thread( target = check_streamer_status, args = ( streamer, streamer_status_dict, time_streamer_request_prev_dict ), daemon = True ).start()
@@ -97,17 +111,10 @@ def main():
             
             streamer_retry_count_dict[ streamer ] += 1
 
-        print_main_output( streamer_status_dict, username_not_valid_list )
+        time.sleep( 1 / REQUEST_PER_SECOND_LIMIT )
 
-        time_current = time.time()
-
-        if ( time_current - time_request_count_refresh_prev ) >= 1:
-            
-            request_count = 0
-
-            time_request_count_refresh_prev = time_current
-
-        time.sleep( MAIN_THREAD_INTERVAL )
+    should_stop = True
+    thread_render.join()
 
     print_main_output( streamer_status_dict, username_not_valid_list )
 
@@ -117,7 +124,7 @@ def main():
 
             print_to_stderr( 'Check your network connection.' )
 
-            quit( thread_exception.reason.errno )
+            sys.exit( thread_exception.reason.errno )
         else:
             raise thread_exception
 
@@ -141,7 +148,7 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
     if streamer_html_content.find( 'isLiveBroadcast' ) != -1:
         streamer_status = StreamerStatus.live
 
-        streamer_tag_position_start = streamer_html_content.find( '/directory/game/' )
+        streamer_tag_position_start = streamer_html_content.find( '/directory/category/' )
 
         if streamer_tag_position_start != -1:
             streamer_tag_position_start = streamer_html_content.find( '>', streamer_tag_position_start + 1 ) + 1
@@ -181,20 +188,20 @@ def get_streamer_html_content( streamer ):
         else:
             thread_exception = error
 
-            quit()
+            sys.exit()
     except urllib.error.URLError as error:
         if type( error.reason ) == TimeoutError:
             streamer_html_content = ''
         else:
             thread_exception = error
 
-            quit()
+            sys.exit()
     except TimeoutError as error:
         streamer_html_content = ''
     except Exception as error:
         thread_exception = error
 
-        quit()
+        sys.exit()
 
     return streamer_html_content
 
@@ -240,13 +247,23 @@ def read_config_file( config_file_path ):
     except FileNotFoundError as error:
         print_to_stderr( str( error ) )
     
-        quit( error.errno )
+        sys.exit( error.errno )
     
     config_file_text = config_file.read()
     
     config_file.close()
 
     return config_file_text
+
+#================================================
+
+def print_main_output_loop( streamer_status_dict, username_not_valid_list ):
+
+    while( should_stop == False ):
+
+        print_main_output( streamer_status_dict, username_not_valid_list )
+
+        time.sleep( ( 1 / REQUEST_PER_SECOND_LIMIT ) / 2 )
 
 #================================================
 
