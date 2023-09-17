@@ -148,7 +148,7 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
     if streamer_html_content.find( 'isLiveBroadcast' ) != -1:
         streamer_status = StreamerStatus.live
 
-        streamer_tag_position_start = streamer_html_content.find( '/directory/game/' )
+        streamer_tag_position_start = streamer_html_content.find( '/directory/category/' )
 
         if streamer_tag_position_start != -1:
             streamer_tag_position_start = streamer_html_content.find( '>', streamer_tag_position_start + 1 ) + 1
