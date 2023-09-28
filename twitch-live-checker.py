@@ -145,7 +145,7 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
 
     time_streamer_request_prev = time.time()
 
-    if streamer_html_content.find( 'isLiveBroadcast' ) != -1:
+    if ( streamer_html_content.find( 'isLiveBroadcast' ) != -1 ) and ( streamer_html_content.find( 'status="offline"' ) == -1 ):
         streamer_status = StreamerStatus.live
 
         streamer_tag_position_start = streamer_html_content.find( '/directory/category/' )
