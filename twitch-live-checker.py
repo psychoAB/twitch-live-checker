@@ -11,6 +11,7 @@ import enum
 import pathlib
 import queue
 import html
+import signal
 
 #================================================
 
@@ -42,7 +43,7 @@ streamer_queue = queue.SimpleQueue()
 
 thread_exception = None
 
-should_stop = False
+flag_should_stop = threading.Event()
 
 #================================================
 
@@ -52,7 +53,7 @@ MAX_STREAMER_STATUS_ENUM_LENGTH = max( map( len, [ streamer_status_enum.value fo
 
 def main():
 
-    global should_stop
+    signal.signal( signal.SIGINT, handler_interrupt )
 
     ( thread_num_max, streamer_list, username_not_valid_list ) = get_config()
     
@@ -70,7 +71,7 @@ def main():
 
     request_count = 0
     
-    while ( ( streamer_queue.empty() == False ) or ( threading.active_count() > 2 ) or ( len( time_streamer_request_prev_dict ) > 0 ) ) and ( thread_exception == None ):
+    while ( ( streamer_queue.empty() == False ) or ( threading.active_count() > 2 ) or ( len( time_streamer_request_prev_dict ) > 0 ) ) and ( thread_exception == None ) and ( flag_should_stop.is_set() == False ):
 
         time_current = time.time()
 
@@ -113,7 +114,7 @@ def main():
 
         time.sleep( 1 / REQUEST_PER_SECOND_LIMIT )
 
-    should_stop = True
+    flag_should_stop.set()
     thread_render.join()
 
     print_main_output( streamer_status_dict, username_not_valid_list )
@@ -259,7 +260,7 @@ def read_config_file( config_file_path ):
 
 def print_main_output_loop( streamer_status_dict, username_not_valid_list ):
 
-    while( should_stop == False ):
+    while( flag_should_stop.is_set() == False ):
 
         print_main_output( streamer_status_dict, username_not_valid_list )
 
@@ -309,6 +310,11 @@ def clear_screen():
         os.system( 'cls' )
     else:
         os.system( 'clear')
+
+#================================================
+
+def handler_interrupt( signal_number, frame_current ):
+    flag_should_stop.set()
 
 #================================================
 
