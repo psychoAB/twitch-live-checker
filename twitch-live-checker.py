@@ -11,6 +11,7 @@ import enum
 import pathlib
 import queue
 import html
+import signal
 
 #================================================
 
@@ -37,12 +38,13 @@ class StreamerStatus( enum.Enum ):
 
 lock_streamer_status_dict = threading.Lock()
 lock_time_streamer_request_prev_dict = threading.Lock()
+lock_exception_thread = threading.Lock()
 
 streamer_queue = queue.SimpleQueue()
 
-thread_exception = None
+exception_thread = None
 
-should_stop = False
+flag_should_stop = threading.Event()
 
 #================================================
 
@@ -52,7 +54,9 @@ MAX_STREAMER_STATUS_ENUM_LENGTH = max( map( len, [ streamer_status_enum.value fo
 
 def main():
 
-    global should_stop
+    signal.signal( signal.SIGINT, handler_interrupt )
+
+    threading.excepthook = hook_exception_thread;
 
     ( thread_num_max, streamer_list, username_not_valid_list ) = get_config()
     
@@ -70,7 +74,7 @@ def main():
 
     request_count = 0
     
-    while ( ( streamer_queue.empty() == False ) or ( threading.active_count() > 2 ) or ( len( time_streamer_request_prev_dict ) > 0 ) ) and ( thread_exception == None ):
+    while ( ( streamer_queue.empty() == False ) or ( threading.active_count() > 2 ) or ( len( time_streamer_request_prev_dict ) > 0 ) ) and ( flag_should_stop.is_set() == False ):
 
         time_current = time.time()
 
@@ -113,20 +117,20 @@ def main():
 
         time.sleep( 1 / REQUEST_PER_SECOND_LIMIT )
 
-    should_stop = True
+    flag_should_stop.set()
     thread_render.join()
 
     print_main_output( streamer_status_dict, username_not_valid_list )
 
-    if thread_exception != None:
-        if ( type( thread_exception ) == urllib.error.URLError ) and ( type( thread_exception.reason ) == socket.gaierror ):
-            print_to_stderr( str( thread_exception ) )
+    if exception_thread != None:
+        if ( type( exception_thread ) == urllib.error.URLError ) and ( type( exception_thread.reason ) == socket.gaierror ):
+            print_to_stderr( str( exception_thread ) )
 
             print_to_stderr( 'Check your network connection.' )
 
-            sys.exit( thread_exception.reason.errno )
+            sys.exit( exception_thread.reason.errno )
         else:
-            raise thread_exception
+            raise exception_thread
 
 #================================================
 
@@ -145,7 +149,7 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
 
     time_streamer_request_prev = time.time()
 
-    if ( streamer_html_content.find( 'isLiveBroadcast' ) != -1 ) and ( streamer_html_content.find( 'status="offline"' ) == -1 ):
+    if streamer_html_content.find( 'Playing' ) != -1:
         streamer_status = StreamerStatus.live
 
         streamer_tag_position_start = streamer_html_content.find( '/directory/category/' )
@@ -178,30 +182,22 @@ def check_streamer_status( streamer, streamer_status_dict, time_streamer_request
 
 def get_streamer_html_content( streamer ):
 
-    global thread_exception
-
     try:
         streamer_html_content = urllib.request.urlopen( 'https://m.twitch.tv/' + streamer, None, REQUEST_TIMEOUT ).read().decode( 'utf-8' )
-    except urllib.error.HTTPError as error:
-        if error.code == 555:
+    except urllib.error.HTTPError as exception:
+        if exception.code == 555:
             streamer_html_content = ''
         else:
-            thread_exception = error
-
-            sys.exit()
-    except urllib.error.URLError as error:
-        if type( error.reason ) == TimeoutError:
+            raise exception
+    except urllib.error.URLError as exception:
+        if type( exception.reason ) == TimeoutError:
             streamer_html_content = ''
         else:
-            thread_exception = error
-
-            sys.exit()
-    except TimeoutError as error:
+            raise exception
+    except TimeoutError as exception:
         streamer_html_content = ''
-    except Exception as error:
-        thread_exception = error
-
-        sys.exit()
+    except Exception as exception:
+        raise exception
 
     return streamer_html_content
 
@@ -259,7 +255,7 @@ def read_config_file( config_file_path ):
 
 def print_main_output_loop( streamer_status_dict, username_not_valid_list ):
 
-    while( should_stop == False ):
+    while( flag_should_stop.is_set() == False ):
 
         print_main_output( streamer_status_dict, username_not_valid_list )
 
@@ -309,6 +305,26 @@ def clear_screen():
         os.system( 'cls' )
     else:
         os.system( 'clear')
+
+#================================================
+
+def hook_exception_thread( exception_arg ):
+
+    global exception_thread
+
+    lock_exception_thread.acquire()
+
+    if(exception_thread == None):
+        exception_thread = exception_arg.exc_value
+
+        flag_should_stop.set()
+
+    lock_exception_thread.release()
+
+#================================================
+
+def handler_interrupt( signal_number, frame_current ):
+    flag_should_stop.set()
 
 #================================================
 
