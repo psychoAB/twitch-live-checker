@@ -207,7 +207,7 @@ def check_streamer_status(
 
     time_streamer_request_prev = time.time()
 
-    if streamer_html_content.find('Playing') != -1:
+    if streamer_html_content.find('isLiveBroadcast') != -1:
         streamer_status = StreamerStatus.live
 
         streamer_tag_position_start = \
@@ -255,7 +255,7 @@ def get_streamer_html_content(streamer):
 
     try:
         streamer_html_content = urllib.request.urlopen(
-            'https://m.twitch.tv/' + streamer,
+            'https://www.twitch.tv/' + streamer,
             None,
             REQUEST_TIMEOUT).read().decode('utf-8')
     except urllib.error.HTTPError as exception:
@@ -388,6 +388,9 @@ def print_main_output(streamer_status_dict, username_not_valid_list):
             '"' +
             " does NOT follow the Twitch's username rules.")
 
+    print('')
+    print('NOTICE: Tag fetching is not working right now.')
+
 
 # ================================================
 
@@ -403,10 +406,11 @@ def print_streamer_status(
     print('{}\t'.format(
         streamer_status.ljust(MAX_STREAMER_STATUS_ENUM_LENGTH)), end='')
 
-    if streamer_status == StreamerStatus.live.value:
-        print('[' + streamer_tag + ']')
-    else:
-        print('')
+    # if streamer_status == StreamerStatus.live.value:
+    #     print('[' + streamer_tag + ']')
+    # else:
+    #     print('')
+    print('')
 
 
 # ================================================
